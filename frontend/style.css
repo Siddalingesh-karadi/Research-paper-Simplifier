@@ -544,15 +544,48 @@ body {
   pointer-events: none;
 }
 
+
 /* ── Utility ─────────────────────────────────────────── */
 .hidden { display: none !important; }
+
+/* ── Success Banner ──────────────────────────────────── */
+.success-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: var(--color-success-bg);
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  color: var(--color-success);
+}
+
+.success-banner svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-success);
+}
+
+.success-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-success);
+  margin-bottom: 4px;
+}
+
+.success-meta {
+  font-size: 0.85rem;
+  color: #15803d;
+}
+
+.success-sep {
+  margin: 0 6px;
+  opacity: 0.5;
+}
 
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 600px) {
   .card { padding: 20px 16px; }
   .header-tagline { display: none; }
-  .qa-input-row { flex-direction: column; }
-  .qa-input-row .btn { width: 100%; justify-content: center; }
-  .paper-loaded-bar { flex-direction: column; align-items: flex-start; }
-  .results-header { flex-direction: column; align-items: flex-start; }
 }

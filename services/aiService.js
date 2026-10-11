@@ -5,7 +5,7 @@
 const https = require('https');
 
 const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
 
 // ─── Helper: Call Gemini API ──────────────────────────────────────────────────
 
@@ -36,10 +36,10 @@ async function callGemini(prompt) {
       }
     ],
     generationConfig: {
-      temperature: 0.2,       // Low temperature = factual, grounded output
+      temperature: 0.2,
       topK: 40,
       topP: 0.9,
-      maxOutputTokens: 4096   // Enough for a detailed paper summary
+      maxOutputTokens: 1500   // Kept short for fast response
     }
   });
 
@@ -99,69 +99,40 @@ async function callGemini(prompt) {
  * @returns {Promise<string>} - Structured simplified explanation in plain text.
  */
 async function simplifyPaper(paperText) {
-  // Limit input to prevent huge API costs and timeouts.
-  // Gemini 1.5 Flash supports ~1M tokens but we cap at ~12,000 words for speed.
-  const MAX_CHARS = 50000;
+  // Cap input for speed — first 20,000 chars covers most papers adequately.
+  const MAX_CHARS = 20000;
   const truncated = paperText.length > MAX_CHARS
-    ? paperText.slice(0, MAX_CHARS) + '\n\n[Note: Paper was truncated to fit processing limits.]'
+    ? paperText.slice(0, MAX_CHARS)
     : paperText;
 
   const prompt = `
-You are an academic research assistant helping students and beginners understand research papers.
+You are a research assistant. Simplify the research paper below for a beginner.
 
-Your task is to read the following research paper and produce a simplified explanation.
+RULES:
+- Be concise and clear. Use simple English.
+- Base answers ONLY on the paper. Do not invent facts.
+- If a section is missing, write: "Not mentioned in this paper."
+- Use bullet points where helpful.
 
-IMPORTANT RULES:
-1. Base your explanation ONLY on the content provided. Do not invent results, statistics, or conclusions.
-2. If a section is not present in the paper, write exactly: "Not available in this paper."
-3. Use simple, clear English. Avoid unnecessary jargon.
-4. When you must use a technical term, explain it briefly in plain English immediately after.
-5. Keep each section concise and easy to read.
-6. Use bullet points for lists.
+Respond with EXACTLY these 5 sections:
 
-OUTPUT FORMAT — respond with EXACTLY these 13 section headings in this order:
+## 1. What is this paper about?
+(2-3 sentences: topic, goal, and main contribution.)
 
-## 1. Paper Overview
-(One short paragraph summarising what this paper is about and who wrote it, if mentioned.)
+## 2. Problem & Solution
+(What problem does it solve? What approach did the authors use?)
 
-## 2. Abstract in Simple English
-(Rewrite the abstract in plain English so a non-expert can understand it.)
+## 3. How it works
+(Brief step-by-step of the methodology or system.)
 
-## 3. Problem Statement
-(What problem or challenge does this research address?)
+## 4. Results
+(Key findings and numbers/metrics mentioned in the paper.)
 
-## 4. Research Objectives
-(What specific goals did the researchers set out to achieve?)
-
-## 5. Existing Methods
-(What methods or approaches existed before this research? What were their shortcomings?)
-
-## 6. Proposed Method
-(What new method, system, or approach does this paper introduce?)
-
-## 7. Methodology
-(Step-by-step: how did the researchers carry out their work?)
-
-## 8. Technologies and Algorithms Used
-(List the key technologies, tools, algorithms, or datasets used.)
-
-## 9. Results and Findings
-(What did the researchers find? Include specific numbers or metrics if the paper mentions them.)
-
-## 10. Advantages
-(What are the strengths or benefits of the proposed method?)
-
-## 11. Limitations
-(What are the weaknesses, constraints, or areas for future improvement?)
-
-## 12. Conclusion
-(What is the overall takeaway from this research?)
-
-## 13. Important Technical Terms Explained Simply
-(List 4–8 key technical terms from the paper and explain each one in one or two simple sentences.)
+## 5. Conclusion & Limitations
+(Main takeaway and any weaknesses or future work mentioned.)
 
 ---
-RESEARCH PAPER TEXT:
+PAPER:
 ${truncated}
 `;
 

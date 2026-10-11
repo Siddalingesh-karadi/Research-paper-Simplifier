@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Research Simplifier — Understand Any Research Paper</title>
-  <meta name="description" content="Upload any academic or IEEE research paper and get a clear, simple explanation instantly." />
+  <meta name="description" content="Upload any academic or IEEE research paper PDF and get a clear, simplified explanation instantly." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
@@ -30,12 +30,9 @@
 
     <!-- ── STEP 1: Upload ── -->
     <section class="card" id="uploadSection">
-      <h2 class="section-title">
-        <span class="step-badge">1</span>
-        Upload Research Paper
-      </h2>
+      <h1 class="section-title">Upload Research Paper</h1>
       <p class="section-desc">
-        Upload a PDF research paper (IEEE, arXiv, or any academic PDF). Maximum file size: 50 MB.
+        Upload a PDF research paper (IEEE, arXiv, or any academic PDF). It will be read and simplified automatically.
       </p>
 
       <!-- Drop Zone -->
@@ -73,46 +70,34 @@
       <div class="alert alert-error hidden" id="uploadError" role="alert"></div>
 
       <!-- Upload Button -->
-      <button class="btn btn-primary" id="uploadBtn" disabled aria-label="Upload and process paper">
-        Upload & Process Paper
+      <button class="btn btn-primary" id="uploadBtn" disabled aria-label="Upload and simplify paper">
+        Upload &amp; Simplify Paper
       </button>
     </section>
 
-    <!-- ── STEP 2: Simplify ── -->
-    <section class="card hidden" id="simplifySection">
+    <!-- ── Processing (shown while uploading + simplifying) ── -->
+    <section class="card hidden" id="processingSection">
+      <div class="loading" id="loading" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <span id="loadingText">Uploading your paper...</span>
+      </div>
+    </section>
+
+    <!-- ── Results ── -->
+    <section class="card hidden" id="resultsSection">
+      <!-- Paper info bar -->
       <div class="paper-loaded-bar">
         <div class="paper-loaded-info">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           <span id="uploadedFileName"></span>
           <span class="paper-word-count" id="wordCountLabel"></span>
         </div>
-        <button class="btn btn-sm btn-outline" id="uploadAnotherBtn">Upload Another Paper</button>
+        <button class="btn btn-sm btn-outline" id="removeBtn" aria-label="Remove paper and start over">
+          Remove &amp; Start Over
+        </button>
       </div>
 
-      <h2 class="section-title">
-        <span class="step-badge">2</span>
-        Get Simplified Explanation
-      </h2>
-      <p class="section-desc">
-        Click the button below to generate a clear, section-by-section explanation of this paper.
-      </p>
-
-      <button class="btn btn-primary" id="simplifyBtn" aria-label="Simplify paper">
-        Simplify Paper
-      </button>
-
-      <!-- Loading -->
-      <div class="loading hidden" id="loading" role="status" aria-live="polite">
-        <div class="spinner" aria-hidden="true"></div>
-        <span id="loadingText">Reading and simplifying your paper — this may take 15–30 seconds...</span>
-      </div>
-
-      <!-- Error -->
-      <div class="alert alert-error hidden" id="simplifyError" role="alert"></div>
-    </section>
-
-    <!-- ── STEP 3: Results ── -->
-    <section class="card hidden" id="resultsSection">
+      <!-- Results header -->
       <div class="results-header">
         <h2 class="section-title" style="margin-bottom:0">Simplified Explanation</h2>
         <div class="results-actions">
@@ -123,58 +108,16 @@
         </div>
       </div>
 
+      <!-- Error -->
+      <div class="alert alert-error hidden" id="simplifyError" role="alert"></div>
+
       <!-- Results Content -->
       <div class="results-body" id="resultsBody"></div>
     </section>
 
-    <!-- ── STEP 4: Ask a Question ── -->
-    <section class="card hidden" id="qaSection">
-      <h2 class="section-title">
-        <span class="step-badge">3</span>
-        Ask a Question About the Paper
-      </h2>
-      <p class="section-desc">
-        Ask anything about the uploaded paper. Answers are based strictly on the paper's content.
-      </p>
-
-      <div class="qa-input-row">
-        <input
-          type="text"
-          class="text-input"
-          id="questionInput"
-          placeholder="e.g. What dataset was used? What is the accuracy of the proposed model?"
-          aria-label="Type your question about the paper"
-          maxlength="500"
-        />
-        <button class="btn btn-primary" id="askBtn" aria-label="Submit question">
-          Ask
-        </button>
-      </div>
-
-      <!-- Q&A Loading -->
-      <div class="loading hidden" id="qaLoading" role="status" aria-live="polite">
-        <div class="spinner" aria-hidden="true"></div>
-        <span>Finding the answer in your paper...</span>
-      </div>
-
-      <!-- Q&A Error -->
-      <div class="alert alert-error hidden" id="qaError" role="alert"></div>
-
-      <!-- Q&A Answer -->
-      <div class="qa-answer hidden" id="qaAnswer">
-        <div class="qa-answer-label">Answer</div>
-        <div class="qa-answer-text" id="qaAnswerText"></div>
-      </div>
-    </section>
-
   </main>
 
-  <!-- ===== FOOTER ===== -->
-  <footer class="footer">
-    <div class="container">
-      <p>Research Simplifier · AI analysis powered by Google Gemini · Paper content is processed externally by Google's API</p>
-    </div>
-  </footer>
+
 
   <!-- Toast Notification -->
   <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>

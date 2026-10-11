@@ -86,9 +86,9 @@ function handleFileSelect(file) {
     return;
   }
 
-  // Validate file size (10 MB)
-  if (file.size > 10 * 1024 * 1024) {
-    showAlert(uploadError, 'File is too large. Maximum allowed size is 10 MB.');
+  // Validate file size (50 MB)
+  if (file.size > 50 * 1024 * 1024) {
+    showAlert(uploadError, 'File is too large. Maximum allowed size is 50 MB.');
     return;
   }
 

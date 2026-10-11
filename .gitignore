@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contains API keys — never commit this)
+.env
+
+# Uploaded PDFs (temporary files, not needed in repo)
+uploads/*.pdf
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

@@ -18,18 +18,16 @@ async function extractTextFromPDF(filePath) {
   // Dynamically import pdfjs-dist (it uses ES module exports internally).
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
-  // Suppress pdfjs internal font-not-found warnings (they don't affect text extraction).
-  pdfjsLib.GlobalWorkerOptions && (pdfjsLib.GlobalWorkerOptions.workerSrc = '');
-
   // Read file into a Uint8Array (the format pdfjs-dist expects).
   const fileBuffer = fs.readFileSync(filePath);
   const uint8Array = new Uint8Array(fileBuffer);
 
-  // Load the PDF document. disableRange/disableStream = no network fetching needed.
+  // Load the PDF document.
+  // Note: we do NOT set standardFontDataUrl — fonts are only needed for rendering,
+  // not for text extraction. Setting it to '' causes a crash.
   const loadingTask = pdfjsLib.getDocument({
     data: uint8Array,
-    standardFontDataUrl: '',   // suppresses the font warning
-    verbosity: 0               // silence internal log messages
+    verbosity: 0   // silence internal log noise
   });
   const pdfDoc = await loadingTask.promise;
 

@@ -7,45 +7,48 @@ const https = require('https');
 // ─── Configuration ────────────────────────────────────────────────────────────
 
 // Primary model — Gemini 2.0 Flash (fast, free-tier friendly)
-const GEMINI_MODEL   = 'gemini-2.0-flash';
+const GEMINI_MODEL   = 'gemini-3.8-flash';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ─── Helper: Call Gemini API ──────────────────────────────────────────────────
 
 /**
- * callGemini
- * ----------
- * Sends a prompt to the Gemini API and returns the text response.
- *
- * @param {string} prompt          - The full prompt to send.
- * @param {object} [genConfig]     - Optional override for generationConfig.
- * @returns {Promise<string>}      - The model's text response.
+ * sleep
+ * -----
+ * Returns a promise that resolves after `ms` milliseconds.
  */
-async function callGemini(prompt, genConfig = {}) {
-  const apiKey = process.env.GEMINI_API_KEY;
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-  if (!apiKey || apiKey === 'your_gemini_api_key_here') {
-    throw new Error(
-      'Gemini API key is not configured. ' +
-      'Please add your GEMINI_API_KEY to the .env file.'
-    );
-  }
+/**
+ * isTransientError
+ * ----------------
+ * Returns true if the error is a temporary Gemini overload / rate-limit
+ * that is worth retrying automatically.
+ */
+function isTransientError(message) {
+  return /high demand|try again later|overloaded|rate.?limit|429|503|quota/i.test(message);
+}
 
+/**
+ * callGeminiOnce
+ * --------------
+ * Makes a single HTTP call to the Gemini API.
+ * Throws on any error (API-level or network).
+ */
+async function callGeminiOnce(prompt, genConfig, apiKey) {
   const url = `${GEMINI_API_URL}?key=${apiKey}`;
 
   const defaultConfig = {
-    temperature:     0.2,   // Near-deterministic → reduces hallucination
+    temperature:     0.2,
     topK:            40,
     topP:            0.9,
     maxOutputTokens: 2048,
   };
 
   const requestBody = JSON.stringify({
-    contents: [
-      {
-        parts: [{ text: prompt }]
-      }
-    ],
+    contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { ...defaultConfig, ...genConfig },
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
@@ -72,7 +75,7 @@ async function callGemini(prompt, genConfig = {}) {
             const parsed = JSON.parse(rawData);
 
             if (parsed.error) {
-              return reject(new Error(`Gemini API error: ${parsed.error.message}`));
+              return reject(new Error(parsed.error.message || 'Unknown Gemini API error'));
             }
 
             const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -81,7 +84,7 @@ async function callGemini(prompt, genConfig = {}) {
               const blockReason = parsed?.candidates?.[0]?.finishReason;
               return reject(new Error(
                 blockReason === 'SAFETY'
-                  ? 'The AI declined to process this content due to safety filters. Please try a different paper.'
+                  ? 'SAFETY_BLOCK'
                   : 'Gemini returned an empty response. Please try again.'
               ));
             }
@@ -98,6 +101,74 @@ async function callGemini(prompt, genConfig = {}) {
     req.write(requestBody);
     req.end();
   });
+}
+
+/**
+ * callGemini
+ * ----------
+ * Sends a prompt to the Gemini API with automatic retry on transient errors.
+ * Retries up to MAX_RETRIES times with exponential backoff (2s, 4s, 8s).
+ *
+ * @param {string} prompt          - The full prompt to send.
+ * @param {object} [genConfig]     - Optional override for generationConfig.
+ * @returns {Promise<string>}      - The model's text response.
+ */
+async function callGemini(prompt, genConfig = {}) {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey || apiKey === 'your_gemini_api_key_here') {
+    throw new Error(
+      'Gemini API key is not configured. ' +
+      'Please add your GEMINI_API_KEY to the .env file.'
+    );
+  }
+
+  const MAX_RETRIES  = 3;
+  const BASE_DELAY   = 2000; // 2 s → 4 s → 8 s
+
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await callGeminiOnce(prompt, genConfig, apiKey);
+      return result;
+
+    } catch (err) {
+      lastError = err;
+
+      // Safety block — don't retry, surface immediately
+      if (err.message === 'SAFETY_BLOCK') {
+        throw new Error(
+          'The AI declined to process this content due to safety filters. ' +
+          'Please try a different paper.'
+        );
+      }
+
+      // Transient error — wait and retry
+      if (isTransientError(err.message) && attempt < MAX_RETRIES) {
+        const delay = BASE_DELAY * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+        console.warn(
+          `[Gemini] Transient error on attempt ${attempt}/${MAX_RETRIES}. ` +
+          `Retrying in ${delay / 1000}s... (${err.message})`
+        );
+        await sleep(delay);
+        continue;
+      }
+
+      // Non-transient or final attempt — break immediately
+      break;
+    }
+  }
+
+  // All retries exhausted — throw a clean user-facing error
+  if (isTransientError(lastError.message)) {
+    throw new Error(
+      'The AI service is currently under high demand. ' +
+      'Please wait a moment and try again.'
+    );
+  }
+
+  throw new Error(`Gemini API error: ${lastError.message}`);
 }
 
 // ─── Simplify Paper ───────────────────────────────────────────────────────────

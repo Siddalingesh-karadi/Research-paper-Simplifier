@@ -4,8 +4,11 @@
 
 const https = require('https');
 
-const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
+// ─── Configuration ────────────────────────────────────────────────────────────
+
+// Primary model — Gemini 2.0 Flash (fast, free-tier friendly)
+const GEMINI_MODEL   = 'gemini-2.0-flash';
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ─── Helper: Call Gemini API ──────────────────────────────────────────────────
 
@@ -14,10 +17,11 @@ const GEMINI_API_URL =
  * ----------
  * Sends a prompt to the Gemini API and returns the text response.
  *
- * @param {string} prompt - The full prompt to send.
- * @returns {Promise<string>} - The model's text response.
+ * @param {string} prompt          - The full prompt to send.
+ * @param {object} [genConfig]     - Optional override for generationConfig.
+ * @returns {Promise<string>}      - The model's text response.
  */
-async function callGemini(prompt) {
+async function callGemini(prompt, genConfig = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
@@ -29,29 +33,35 @@ async function callGemini(prompt) {
 
   const url = `${GEMINI_API_URL}?key=${apiKey}`;
 
+  const defaultConfig = {
+    temperature:     0.2,   // Near-deterministic → reduces hallucination
+    topK:            40,
+    topP:            0.9,
+    maxOutputTokens: 2048,
+  };
+
   const requestBody = JSON.stringify({
     contents: [
       {
         parts: [{ text: prompt }]
       }
     ],
-    generationConfig: {
-      temperature: 0.2,
-      topK: 40,
-      topP: 0.9,
-      maxOutputTokens: 1500   // Kept short for fast response
-    }
+    generationConfig: { ...defaultConfig, ...genConfig },
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+    ]
   });
 
-  // Use native https instead of axios to avoid extra dependencies.
   return new Promise((resolve, reject) => {
     const req = https.request(
       url,
       {
-        method: 'POST',
+        method:  'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(requestBody)
+          'Content-Type':   'application/json',
+          'Content-Length': Buffer.byteLength(requestBody),
         }
       },
       (res) => {
@@ -61,19 +71,22 @@ async function callGemini(prompt) {
           try {
             const parsed = JSON.parse(rawData);
 
-            // Check for API-level errors
             if (parsed.error) {
               return reject(new Error(`Gemini API error: ${parsed.error.message}`));
             }
 
-            const text =
-              parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+            const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
 
             if (!text) {
-              return reject(new Error('Gemini returned an empty response. Please try again.'));
+              const blockReason = parsed?.candidates?.[0]?.finishReason;
+              return reject(new Error(
+                blockReason === 'SAFETY'
+                  ? 'The AI declined to process this content due to safety filters. Please try a different paper.'
+                  : 'Gemini returned an empty response. Please try again.'
+              ));
             }
 
-            resolve(text);
+            resolve(text.trim());
           } catch (e) {
             reject(new Error('Failed to parse Gemini API response.'));
           }
@@ -93,50 +106,53 @@ async function callGemini(prompt) {
  * simplifyPaper
  * -------------
  * Builds a structured prompt and asks Gemini to produce a simplified
- * explanation of the research paper across 13 defined sections.
+ * explanation of the research paper across 5 defined sections.
  *
  * @param {string} paperText - Raw extracted text from the PDF.
- * @returns {Promise<string>} - Structured simplified explanation in plain text.
+ * @returns {Promise<string>} - Structured simplified explanation in markdown.
  */
 async function simplifyPaper(paperText) {
-  // Cap input for speed — first 20,000 chars covers most papers adequately.
+  // Cap input — first 20,000 chars covers most 8–15 page papers adequately.
   const MAX_CHARS = 20000;
   const truncated = paperText.length > MAX_CHARS
-    ? paperText.slice(0, MAX_CHARS)
+    ? paperText.slice(0, MAX_CHARS) + '\n\n[Paper truncated at 20,000 characters for processing]'
     : paperText;
 
   const prompt = `
-You are a research assistant. Simplify the research paper below for a beginner.
+You are an expert academic research assistant helping students understand research papers.
 
-RULES:
-- Be concise and clear. Use simple English.
-- Base answers ONLY on the paper. Do not invent facts.
-- If a section is missing, write: "Not mentioned in this paper."
-- Use bullet points where helpful.
+TASK: Simplify the research paper below into a structured, beginner-friendly explanation.
 
-Respond with EXACTLY these 5 sections:
+STRICT RULES:
+1. Base ALL answers ONLY on the paper content provided. Do not add outside knowledge or invent facts.
+2. If a section's content is not present in the paper, write exactly: "Not mentioned in this paper."
+3. Use simple, clear English. Avoid jargon unless you briefly explain it.
+4. Use bullet points (starting with -) for lists. Use **bold** for key terms.
+5. Be thorough but concise — aim for 3–6 bullet points or 2–4 sentences per section.
+
+OUTPUT FORMAT: You MUST respond with EXACTLY these 5 sections using these exact headings:
 
 ## 1. What is this paper about?
-(2-3 sentences: topic, goal, and main contribution.)
+(2-3 sentences: the topic, the main goal, and the key contribution or finding.)
 
 ## 2. Problem & Solution
-(What problem does it solve? What approach did the authors use?)
+(What specific problem does this paper address? What is the proposed solution or approach?)
 
 ## 3. How it works
-(Brief step-by-step of the methodology or system.)
+(Step-by-step explanation of the methodology, system, or approach used. Use bullet points.)
 
-## 4. Results
-(Key findings and numbers/metrics mentioned in the paper.)
+## 4. Results & Key Findings
+(What were the main results? Include any numbers, accuracy metrics, or benchmarks mentioned.)
 
 ## 5. Conclusion & Limitations
-(Main takeaway and any weaknesses or future work mentioned.)
+(Main takeaway of the paper, and any weaknesses, limitations, or future work the authors mention.)
 
 ---
-PAPER:
+RESEARCH PAPER TEXT:
 ${truncated}
 `;
 
-  return callGemini(prompt);
+  return callGemini(prompt, { maxOutputTokens: 2048 });
 }
 
 // ─── Answer Question ──────────────────────────────────────────────────────────
@@ -148,25 +164,24 @@ ${truncated}
  *
  * @param {string} paperText - Raw extracted text from the PDF.
  * @param {string} question  - The user's question.
- * @returns {Promise<string>} - The answer.
+ * @returns {Promise<string>} - The grounded answer.
  */
 async function answerQuestion(paperText, question) {
   const MAX_CHARS = 50000;
   const truncated = paperText.length > MAX_CHARS
-    ? paperText.slice(0, MAX_CHARS)
+    ? paperText.slice(0, MAX_CHARS) + '\n\n[Paper truncated]'
     : paperText;
 
   const prompt = `
-You are an academic research assistant.
+You are an academic research assistant. A user has uploaded a research paper and is asking a question about it.
 
-A user has uploaded a research paper and is asking a question about it.
-
-RULES:
+STRICT RULES:
 1. Answer ONLY based on the paper content provided below.
-2. If the answer is not in the paper, say: "I could not find information about this in the paper."
-3. Do not invent facts, numbers, or conclusions.
-4. Keep the answer clear, concise, and easy to understand.
+2. If the answer is not in the paper, respond with: "I could not find information about this in the paper."
+3. Do NOT invent facts, numbers, citations, or conclusions not present in the paper.
+4. Keep the answer clear, accurate, and easy to understand.
 5. If the question is unrelated to the paper, say: "That question does not appear to be related to this paper."
+6. You may use bullet points for multi-part answers. Use **bold** for key terms.
 
 USER'S QUESTION:
 ${question}
@@ -176,7 +191,7 @@ RESEARCH PAPER TEXT:
 ${truncated}
 `;
 
-  return callGemini(prompt);
+  return callGemini(prompt, { maxOutputTokens: 1024, temperature: 0.15 });
 }
 
 module.exports = { simplifyPaper, answerQuestion };
